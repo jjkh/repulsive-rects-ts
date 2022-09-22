@@ -37,7 +37,7 @@ export default class ForceGraph extends Scene {
         new Button(
             { x: 0, y: 160, w: 40, h: 40 },
             '🔄',
-            'shuffle positions of all boxes, keeping the links',
+            'shuffle positions of all floating boxes, keeping the links',
             () => {
                 let randPoint = (s: Size): Point => {
                     return {
@@ -45,7 +45,8 @@ export default class ForceGraph extends Scene {
                         y: Math.floor(Math.random() * (this.canvas.height - s.h * 2)) + s.h / 2,
                     }
                 }
-                for (let box of this.boxes)
+                const boxes = this.boxes.filter(b => !b.pinned);
+                for (let box of boxes)
                     box.rect = Object.assign(box.rect, randPoint(box.rect));
             }
         ),
