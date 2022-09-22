@@ -1,10 +1,8 @@
-import Scene from './lib/Scene';
-
 import './style.css';
 import { MainCanvas } from './lib/Canvas';
 import ForceGraph from './scenes/ForceGraph';
 
-let currentScene: Scene;
+let currentScene: ForceGraph;
 
 // debug info
 let debugInfoDiv: HTMLDivElement | null;
@@ -39,7 +37,7 @@ function mainLoop(timestamp: DOMHighResTimeStamp) {
   if (debugInfoDiv) {
     // debug info
     const fps = 1_000 / (timestamp - lastFrameTime);
-    debugInfoDiv.innerHTML = `${fps.toFixed(2)} fps`;
+    debugInfoDiv.innerHTML = `${fps.toFixed(2)} fps<br/>${currentScene.boxes.length} boxes, ${currentScene.links.length} links`;
     lastFrameTime = timestamp;
   }
 

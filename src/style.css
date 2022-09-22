@@ -32,7 +32,9 @@ body {
   top: 0;
   right: 0;
   font-family: monospace;
-  color: rgb(40, 150, 40)
+  color: rgb(40, 150, 40);
+  text-align: right;
+  line-height: 1em;
 }
 
 #app {

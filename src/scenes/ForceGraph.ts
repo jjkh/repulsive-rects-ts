@@ -5,36 +5,51 @@ const grow = (r: Rect, s: number) => { return { x: r.x - s / 2, y: r.y - s / 2, 
 const centre = (r: Rect) => { return { x: r.x + r.w / 2, y: r.y + r.h / 2 } }
 
 const GRAVITY_FORCE = 100;
-const INTER_NODE_REPULSION = 18;
+const INTER_NODE_REPULSION = 12;
 const LINK_ATTRACTION = 1 / 12000;
 
 export default class ForceGraph extends Scene {
     buttons = [
         new Button(
-            { x: 0, y: 0, w: 50, h: 50 },
+            { x: 0, y: 0, w: 40, h: 40 },
             '🖐',
             'drag node to move, shift-click to pin/unpin',
-            () => { this.activeTool = 'hand'; this.buttons[0].pressed = true; this.buttons[1].pressed = false; }
+            () => { this.activeTool = 'hand'; this.buttons.map((b, i) => b.pressed = i === 0); }
         ),
         new Button(
-            { x: 0, y: 50, w: 50, h: 50 },
+            { x: 0, y: 40, w: 40, h: 40 },
             '🔗',
             'drag between nodes to add link, shift-drag to remove',
-            () => { this.activeTool = 'link'; this.buttons[1].pressed = true; this.buttons[0].pressed = false; }
+            () => { this.activeTool = 'link'; this.buttons.map((b, i) => b.pressed = i === 1); }
+        ),
+        new Button(
+            { x: 0, y: 80, w: 40, h: 40 },
+            '➕',
+            'click to add box',
+            () => { this.activeTool = 'add'; this.buttons.map((b, i) => b.pressed = i === 2); }
+        ),
+        new Button(
+            { x: 0, y: 120, w: 40, h: 40 },
+            '➖',
+            'click to remove box',
+            () => { this.activeTool = 'remove'; this.buttons.map((b, i) => b.pressed = i === 3); }
         ),
     ]
-    activeTool: 'hand' | 'link' = 'hand';
+    activeTool: 'hand' | 'link' | 'add' | 'remove' = 'hand';
 
     boxes: Array<Box> = [
-        new Box({ w: 120, h: 120 }, 'a'),
-        new Box({ w: 110, h: 120 }, 'b'),
-        new Box({ w: 120, h: 110 }, 'c'),
-        new Box({ w: 110, h: 110 }, 'd'),
-        new Box({ w: 120, h: 120 }, 'e'),
-        new Box({ w: 110, h: 120 }, 'f'),
-        new Box({ w: 120, h: 110 }, 'g'),
-        new Box({ w: 110, h: 110 }, 'h'),
+        new Box({ w: 50, h: 50 }, 'a'),
+        new Box({ w: 80, h: 50 }, 'b'),
+        new Box({ w: 50, h: 50 }, 'c'),
+        new Box({ w: 50, h: 80 }, 'd'),
+        new Box({ w: 50, h: 80 }, 'e'),
+        new Box({ w: 50, h: 50 }, 'f'),
+        new Box({ w: 80, h: 50 }, 'g'),
+        new Box({ w: 50, h: 50 }, 'h'),
     ];
+
+    phantomBox?: Box;
+    debugOverlay?: Canvas;
 
     links = [
         [0, 1],
@@ -133,6 +148,10 @@ export default class ForceGraph extends Scene {
             // TODO: collect the length of this to get most stable point reached
             box.rect.x += force.x * delta;
             box.rect.y += force.y * delta;
+            box.rect.x = Math.max(box.rect.x, -box.rect.w * 0.5);
+            box.rect.x = Math.min(box.rect.x, this.canvas.width - box.rect.w * 0.5);
+            box.rect.y = Math.max(box.rect.y, -box.rect.h * 0.5);
+            box.rect.y = Math.min(box.rect.y, this.canvas.height - box.rect.h * 0.5);
 
             box.draw(this.canvas);
             this.canvas.fillCircle(box.link, 4, '#666');
@@ -142,6 +161,10 @@ export default class ForceGraph extends Scene {
         this.canvas.ctx.strokeStyle = '#666';
         for (let link of this.links)
             this.canvas.drawLine(this.boxes[link[0]].link, this.boxes[link[1]].link);
+
+        // if phantom box exists, draw it with 60% opacity
+        if (this.phantomBox)
+            this.canvas.setGlobalAlpha(0.6, () => this.phantomBox!.draw(this.canvas));
 
         for (let button of this.buttons)
             button.draw(this.canvas);
@@ -185,6 +208,12 @@ export default class ForceGraph extends Scene {
                 return;
             }
         }
+
+        if (this.activeTool === 'add' && this.phantomBox) {
+            this.boxes.push(this.phantomBox);
+            this.phantomBox = undefined;
+            return;
+        }
     }
 
     onPointerDown(ev: PointerEvent, p: Point): void {
@@ -192,22 +221,32 @@ export default class ForceGraph extends Scene {
 
         for (let box of this.boxes) {
             if (contains(box.rect, p)) {
-                if (this.activeTool === 'hand') {
-                    // pin/unpin
-                    if (ev.shiftKey) {
-                        box.pinned = !box.pinned;
-                        return;
-                    }
+                switch (this.activeTool) {
+                    case 'hand':
+                        if (ev.shiftKey) {
+                            // pin/unpin
+                            box.pinned = !box.pinned;
+                            return;
+                        }
 
-                    this.draggingStart = { x: p.x - box.rect.x, y: p.y - box.rect.y };
-                    this.dragging = box;
-                    this.dragging.hovered = true;
-                    this.dragging.pinned = true;
-                }
-                else if (this.activeTool === 'link') {
-                    this.linkAction = { start: box, add: !ev.shiftKey };
-                    this.hovered = undefined;
-                    box.hovered = true;
+                        this.draggingStart = { x: p.x - box.rect.x, y: p.y - box.rect.y };
+                        this.dragging = box;
+                        this.dragging.hovered = true;
+                        this.dragging.pinned = true;
+                        break;
+                    case 'link':
+                        this.linkAction = { start: box, add: !ev.shiftKey };
+                        this.hovered = undefined;
+                        box.hovered = true;
+                        break;
+                    case 'remove':
+                        // should be in pointer up...
+                        const boxIdx = this.boxes.indexOf(box);
+                        this.links = this.links
+                            .filter(([a, b]) => a != boxIdx && b != boxIdx)
+                            .map(([a, b]) => [a < boxIdx ? a : a - 1, b < boxIdx ? b : b - 1]);
+                        this.boxes.splice(boxIdx, 1);
+                        break;
                 }
             }
         }
@@ -222,6 +261,22 @@ export default class ForceGraph extends Scene {
 
         for (let button of this.buttons)
             button.hovered = contains(button.rect, p);
+
+        if (this.activeTool === 'add') {
+            if (!this.phantomBox) {
+                const currentCode = this.boxes[this.boxes.length - 1].text.charCodeAt(0);
+                const aCode = 'a'.charCodeAt(0);
+                this.phantomBox = new Box(
+                    { w: Math.floor(Math.random() * 50) + 50, h: Math.floor(Math.random() * 50) + 50 },
+                    String.fromCharCode(((currentCode - aCode + 1) % 26) + aCode)
+                );
+            }
+            this.phantomBox.rect.x = p.x - this.phantomBox.rect.w / 2;
+            this.phantomBox.rect.y = p.y - this.phantomBox.rect.h / 2;
+            return;
+        } else if (this.phantomBox) {
+            this.phantomBox = undefined;
+        }
 
         if (this.hovered) {
             this.hovered.hovered = false;
@@ -292,8 +347,8 @@ class Button {
         canvas.fontSize = 24;
         canvas.drawTextRect(this.text, this.rect);
         if (this.hovered) {
-            canvas.fontSize = 20;
-            canvas.drawTextRect(this.hoverText, { x: this.rect.x + this.rect.w + 10, y: this.rect.y, w: 0, h: this.rect.h }, { vertical: 'middle', horizontal: 'left' })
+            canvas.fontSize = 18;
+            canvas.drawTextRect(this.hoverText, { x: this.rect.x + this.rect.w + 6, y: this.rect.y, w: 0, h: this.rect.h }, { vertical: 'middle', horizontal: 'left' })
         }
         canvas.ctx.strokeStyle = '#999';
         canvas.ctx.lineWidth = 1;
