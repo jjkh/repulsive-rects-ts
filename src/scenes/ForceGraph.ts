@@ -4,9 +4,9 @@ import Scene from "../lib/Scene";
 const grow = (r: Rect, s: number) => { return { x: r.x - s / 2, y: r.y - s / 2, w: r.w + s, h: r.h + s } }
 const centre = (r: Rect) => { return { x: r.x + r.w / 2, y: r.y + r.h / 2 } }
 
-const GRAVITY_FORCE = 100;
+const GRAVITY_FORCE = 120;
 const INTER_NODE_REPULSION = 12;
-const LINK_ATTRACTION = 1 / 12000;
+const LINK_ATTRACTION = 1 / 8000;
 
 export default class ForceGraph extends Scene {
     buttons = [
@@ -33,6 +33,21 @@ export default class ForceGraph extends Scene {
             '➖',
             'click to remove box',
             () => { this.activeTool = 'remove'; this.buttons.map((b, i) => b.pressed = i === 3); }
+        ),
+        new Button(
+            { x: 0, y: 160, w: 40, h: 40 },
+            '🔄',
+            'shuffle positions of all boxes, keeping the links',
+            () => {
+                let randPoint = (s: Size): Point => {
+                    return {
+                        x: Math.floor(Math.random() * (this.canvas.width - s.w * 2)) + s.w / 2,
+                        y: Math.floor(Math.random() * (this.canvas.height - s.h * 2)) + s.h / 2,
+                    }
+                }
+                for (let box of this.boxes)
+                    box.rect = Object.assign(box.rect, randPoint(box.rect));
+            }
         ),
     ]
     activeTool: 'hand' | 'link' | 'add' | 'remove' = 'hand';
@@ -159,8 +174,8 @@ export default class ForceGraph extends Scene {
 
         this.canvas.ctx.lineWidth = 2;
         this.canvas.ctx.strokeStyle = '#666';
-        for (let link of this.links)
-            this.canvas.drawLine(this.boxes[link[0]].link, this.boxes[link[1]].link);
+        for (let [a, b] of this.links)
+            this.canvas.drawLine(this.boxes[a].link, this.boxes[b].link);
 
         // if phantom box exists, draw it with 60% opacity
         if (this.phantomBox)
