@@ -4,6 +4,10 @@ import Scene from "../lib/Scene";
 const grow = (r: Rect, s: number) => { return { x: r.x - s / 2, y: r.y - s / 2, w: r.w + s, h: r.h + s } }
 const centre = (r: Rect) => { return { x: r.x + r.w / 2, y: r.y + r.h / 2 } }
 
+const GRAVITY_FORCE = 100;
+const INTER_NODE_REPULSION = 18;
+const LINK_ATTRACTION = 1 / 12000;
+
 export default class ForceGraph extends Scene {
     buttons = [
         new Button(
@@ -78,36 +82,58 @@ export default class ForceGraph extends Scene {
         let delta = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
 
-        const screenRect = this.canvas.rect;
-        const screenCentre = centre(screenRect);
+        const screenCentre = centre(this.canvas.rect);
+
+        // draw in reverse order, so first element of array is on top
+        // this ensures the hover/onclick works consistently with draw order
         for (let i = this.boxes.length - 1; i >= 0; i--) {
+            var force = { x: 0, y: 0 };
             const box = this.boxes[i];
             const linked = this.linked(box);
             if (!box.pinned) {
-                // weak force pulling everything to the centre
-                box.rect.x += (screenCentre.x - box.centre.x) * delta * 2;
-                box.rect.y += (screenCentre.y - box.centre.y) * delta * 2;
+                // GRAVITY: weak force pulling everything uniformly to the centre
 
-                // strong repulsion between nodes (falls off with distance)
+                // normalize vector so force is the same no matter the distance from the centre
+                // this allows 'islands' at the edge of the screen without having an overwhelming force from the pinned box
+                const vec = { x: screenCentre.x - box.centre.x, y: screenCentre.y - box.centre.y };
+                const len = Math.sqrt(vec.x ** 2 + vec.y ** 2);
+                const norm = { x: vec.x / len, y: vec.y / len };
+
+                // scale gravity when within the box size of the centre
+                // this prevents a box getting in the centre and oscillating wildly (because we have no damping)
+                const centreFalloff = Math.min(1, len / ((box.rect.w + box.rect.h) / 2))
+                force.x += norm.x * GRAVITY_FORCE * centreFalloff;
+                force.y += norm.y * GRAVITY_FORCE * centreFalloff;
+
+                // INTER-NODE REPULSION: strong repulsion between nodes (falls off with distance)
                 for (let other of this.boxes) {
                     if (box === other) continue;
 
+                    // normalise to unit vector
                     const vec = { x: box.centre.x - other.centre.x, y: box.centre.y - other.centre.y };
                     const len = Math.sqrt(vec.x ** 2 + vec.y ** 2);
                     const norm = { x: vec.x / len, y: vec.y / len };
-                    box.rect.x += norm.x * delta * box.mass / 120;
-                    box.rect.y += norm.y * delta * box.mass / 120;
+
+                    // force is x/len ^ 2 - exponential falloff with distance 
+                    const falloff = ((box.mass + other.mass) / 2) * (INTER_NODE_REPULSION / len) ** 2;
+                    force.x += norm.x * falloff;
+                    force.y += norm.y * falloff;
                 }
 
-                // weak attraction between linked nodes
+                // LINK ATTRACTION: weak attraction between linked nodes
                 for (let other of linked) {
-                    const vec = { x: other.centre.x - box.centre.x, y: other.centre.y - box.centre.y };
-                    const len = Math.sqrt(vec.x ** 2 + vec.y ** 2);
-                    const norm = { x: vec.x / len, y: vec.y / len };
-                    box.rect.x += norm.x * delta * (box.mass + other.mass) / 800;
-                    box.rect.y += norm.y * delta * (box.mass + other.mass) / 800;
+                    // linear force dependent on distance and average 'mass'
+                    const averageMass = (box.mass + other.mass) / 2;
+                    force.x += (other.centre.x - box.centre.x) * averageMass * LINK_ATTRACTION;
+                    force.y += (other.centre.y - box.centre.y) * averageMass * LINK_ATTRACTION;
                 }
             }
+
+            // apply calculated force to box
+            // TODO: collect the length of this to get most stable point reached
+            box.rect.x += force.x * delta;
+            box.rect.y += force.y * delta;
+
             box.draw(this.canvas);
             this.canvas.fillCircle(box.link, 4, '#666');
         }
