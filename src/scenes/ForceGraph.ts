@@ -280,7 +280,7 @@ export default class ForceGraph extends Scene {
 
         if (this.activeTool === 'add') {
             if (!this.phantomBox) {
-                const currentCode = this.boxes[this.boxes.length - 1].text.charCodeAt(0);
+                const currentCode = (this.boxes[this.boxes.length - 1]?.text ?? 'z').charCodeAt(0);
                 const aCode = 'a'.charCodeAt(0);
                 this.phantomBox = new Box(
                     { w: Math.floor(Math.random() * 50) + 50, h: Math.floor(Math.random() * 50) + 50 },
